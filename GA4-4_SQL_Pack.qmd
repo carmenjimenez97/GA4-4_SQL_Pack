@@ -1,0 +1,427 @@
+
+---
+title: "GA4-4: SQL Pack (Individual)"
+subtitle: "Exploring GA4 Data with BigQuery"
+author: "Carmen Lía Jiménez Rodríguez"
+date: "2026-11-12"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: false
+    embed-resources: true
+---
+
+# Introduction
+
+For this assignment, I worked with Google Analytics 4 (GA4) data in BigQuery to practice writing SQL queries and understanding the results.
+
+I created eight different queries to explore how users interact with an ecommerce website. I looked at common website events, daily activity, device usage, popular pages, engagement time, traffic sources, purchases, and the steps users take before buying a product.
+
+My goal was not only to practice SQL, but also to understand how these queries can help answer real marketing questions. For example, knowing which devices people use or which pages receive the most views can help a business identify opportunities to improve its website and customer experience.
+
+Throughout this assignment, I practiced filtering data, grouping results, using UNNEST to extract event parameters, and organizing queries with CTEs and JOINs.
+
+# Dataset and Methodology
+
+For this analysis, I used the public Google Merchandise Store GA4 ecommerce dataset available in BigQuery.
+
+**Dataset:** `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+
+Most of my queries focus on November 2020, while some use the first week of the month to explore daily website activity in more detail.
+
+I worked with different GA4 fields, including event names, dates, user identifiers, device categories, and event parameters. I also used ecommerce information to analyze purchases and revenue.
+
+One important thing I considered is that GA4 records data at the event level. This means the number of events is not the same as the number of users, since one person can generate multiple events while browsing the website.
+
+Since this is a public sample dataset with obfuscated information, I used the results mainly to practice SQL and understand how these analyses could be applied to real marketing decisions.
+
+
+# Query 1: Most Frequent GA4 Events
+
+## Purpose
+
+For my first query, I wanted to identify the most common events recorded on the website during November 2020. This helped me understand which actions users performed most frequently.
+
+## SQL Query
+
+```sql
+SELECT
+  event_name,
+  COUNT(*) AS total_events,
+  COUNT(DISTINCT user_pseudo_id) AS unique_users
+FROM
+  `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+WHERE
+  _TABLE_SUFFIX BETWEEN '20201101' AND '20201130'
+GROUP BY
+  event_name
+ORDER BY
+  total_events DESC
+LIMIT 10;
+```
+
+## Results
+
+The query returned the ten most frequent events. Some of the main results were:
+
+| Event | Total Events | Unique Users |
+|---|---:|---:|
+| page_view | 453,904 | 79,181 |
+| user_engagement | 407,196 | 65,757 |
+| scroll | 170,855 | 48,787 |
+| view_item | 148,639 | 21,440 |
+
+## Interpretation
+
+Page views were the most common event, with 453,904 occurrences recorded during November 2020. I also noticed that user engagement and scrolling events were very frequent, showing that visitors interacted with the website in different ways.
+
+From a marketing perspective, this information is useful because it gives a general picture of website activity and helps identify which interactions deserve further analysis. However, event counts do not represent individual users, since the same person can trigger an event multiple times.
+
+
+# Query 2: Daily Website Traffic
+
+## Purpose
+
+For this query, I wanted to see how website activity changed during the first week of November 2020. I compared the number of events and unique users for each day to better understand daily traffic patterns.
+
+## SQL Query
+
+```sql
+SELECT
+  event_date,
+  COUNT(*) AS total_events,
+  COUNT(DISTINCT user_pseudo_id) AS unique_users
+FROM
+  `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+WHERE
+  _TABLE_SUFFIX BETWEEN '20201101' AND '20201107'
+GROUP BY
+  event_date
+ORDER BY
+  event_date;
+```
+
+## Results
+
+| Date | Total Events | Unique Users |
+|---|---:|---:|
+| November 1, 2020 | 31,272 | 2,365 |
+| November 2, 2020 | 48,388 | 3,262 |
+| November 3, 2020 | 61,672 | 4,648 |
+| November 4, 2020 | 51,866 | 3,734 |
+| November 5, 2020 | 51,952 | 3,272 |
+| November 6, 2020 | 49,004 | 2,813 |
+| November 7, 2020 | 34,309 | 2,004 |
+
+## Interpretation
+
+I noticed that November 3 had the highest activity during the week, with 61,672 events and 4,648 unique users. Activity was lower on November 1 and November 7, which suggests that website traffic varied across the week.
+
+From a marketing perspective, comparing daily activity can help identify when visitors are most active and support decisions about campaign timing. However, one week of data is not enough to confirm a consistent weekly pattern, and the number of events should not be confused with the number of users.
+
+
+# Query 3: Device Categories
+
+## Purpose
+
+For this query, I wanted to understand which devices people used to visit the website. I compared desktop, mobile, and tablet activity to see which devices generated the most events and users.
+
+## SQL Query
+
+```sql
+SELECT
+  device.category AS device_category,
+  COUNT(*) AS total_events,
+  COUNT(DISTINCT user_pseudo_id) AS unique_users
+FROM
+  `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+WHERE
+  _TABLE_SUFFIX BETWEEN '20201101' AND '20201130'
+GROUP BY
+  device_category
+ORDER BY
+  total_events DESC;
+```
+
+## Results
+
+| Device | Total Events | Unique Users |
+|---|---:|---:|
+| Desktop | 849,334 | 46,310 |
+| Mobile | 590,494 | 31,824 |
+| Tablet | 32,884 | 1,789 |
+
+## Interpretation
+
+Desktop generated the highest number of events, followed by mobile and tablet. I found it interesting that mobile also represented a large amount of website activity, even though desktop was the most frequently used device.
+
+From a marketing perspective, these results show why it is important to provide a good website experience on both desktop and mobile. However, the numbers do not necessarily represent separate individuals, since someone could visit the website using more than one device.
+
+
+# Query 4: Top Viewed Pages (UNNEST)
+
+## Purpose
+
+For this query, I wanted to find out which pages received the most views during the first week of November 2020. I used UNNEST to extract the page URL from the event parameters and identify the most visited pages.
+
+## SQL Query
+
+```sql
+SELECT
+  (
+    SELECT ep.value.string_value
+    FROM UNNEST(event_params) AS ep
+    WHERE ep.key = 'page_location'
+  ) AS page_url,
+  COUNT(*) AS total_page_views,
+  COUNT(DISTINCT user_pseudo_id) AS unique_users
+FROM
+  `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+WHERE
+  _TABLE_SUFFIX BETWEEN '20201101' AND '20201107'
+  AND event_name = 'page_view'
+GROUP BY
+  page_url
+ORDER BY
+  total_page_views DESC
+LIMIT 10;
+```
+
+## Results
+
+This query returned the ten most viewed page URLs during the selected week, along with the number of page views and distinct users for each page.
+
+## Interpretation
+
+This query helped me understand which parts of the website attracted the most attention. From a marketing perspective, identifying popular pages can help a business decide where to focus its content and website improvements.
+
+I also learned how to extract information from GA4 event parameters using UNNEST. One limitation is that the same page may appear under different URLs if it contains different query parameters, so the results may need additional cleaning.
+
+
+# Query 5: User Engagement Time (UNNEST)
+
+## Purpose
+
+For this query, I wanted to explore how much engagement time was recorded on different devices. I compared desktop, mobile, and tablet to understand how website interaction time varied by device category.
+
+## SQL Query
+
+```sql
+SELECT
+  device.category AS device_category,
+  COUNT(*) AS engagement_events,
+  ROUND(
+    SUM(
+      COALESCE(
+        (
+          SELECT ep.value.int_value
+          FROM UNNEST(event_params) AS ep
+          WHERE ep.key = 'engagement_time_msec'
+        ),
+        0
+      )
+    ) / 1000 / 60,
+    2
+  ) AS total_engagement_minutes
+FROM
+  `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+WHERE
+  _TABLE_SUFFIX BETWEEN '20201101' AND '20201107'
+  AND event_name = 'user_engagement'
+GROUP BY
+  device_category
+ORDER BY
+  total_engagement_minutes DESC;
+```
+
+## Results
+
+This query calculated the total engagement time recorded by GA4 for each device category during the first week of November 2020.
+
+The results included the number of user_engagement events and the total engagement time expressed in minutes.
+
+## Interpretation
+
+I used this query to better understand how engagement time differed across devices. This information can be useful for digital marketers because it provides another way to evaluate how visitors interact with a website beyond simply counting page views.
+
+I also practiced extracting a numerical parameter from GA4 using UNNEST. One limitation is that this query only includes time recorded in user_engagement events, so it should not be interpreted as the complete engagement time of every visitor.
+
+
+# Query 6: Traffic Sources (CTE)
+
+## Purpose
+
+For this query, I wanted to understand where the website's users originally came from. I used a CTE to organize the traffic source information before comparing the number of events and users associated with each source.
+
+## SQL Query
+
+```sql
+WITH traffic_data AS (
+  SELECT
+    COALESCE(
+      traffic_source.source,
+      '(not available)'
+    ) AS traffic_source,
+    user_pseudo_id,
+    event_name
+  FROM
+    `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+  WHERE
+    _TABLE_SUFFIX BETWEEN '20201101' AND '20201130'
+)
+
+SELECT
+  traffic_source,
+  COUNT(*) AS total_events,
+  COUNT(DISTINCT user_pseudo_id) AS unique_users
+FROM
+  traffic_data
+GROUP BY
+  traffic_source
+ORDER BY
+  total_events DESC
+LIMIT 10;
+```
+
+## Results
+
+This query returned the top ten recorded traffic sources, along with the total number of events and distinct users associated with each source.
+
+## Interpretation
+
+I used this query to explore which sources were associated with the most website activity. From a marketing perspective, this information can help identify which acquisition sources are worth examining more closely.
+
+Using a CTE also helped me organize the SQL into smaller, easier-to-read sections. One important limitation is that the GA4 traffic_source field represents the user's first recorded acquisition source, rather than the source of each individual visit.
+
+
+# Query 7: Ecommerce Revenue
+
+## Purpose
+
+For this query, I wanted to explore the website's sales activity during November 2020. I looked at the number of purchases, purchasing users, and revenue recorded each day to understand how ecommerce performance changed throughout the month.
+
+## SQL Query
+
+```sql
+SELECT
+  event_date,
+  COUNT(*) AS total_purchases,
+  COUNT(DISTINCT user_pseudo_id) AS purchasing_users,
+  ROUND(
+    SUM(COALESCE(ecommerce.purchase_revenue, 0)),
+    2
+  ) AS total_revenue_usd
+FROM
+  `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+WHERE
+  _TABLE_SUFFIX BETWEEN '20201101' AND '20201130'
+  AND event_name = 'purchase'
+GROUP BY
+  event_date
+ORDER BY
+  event_date;
+```
+
+## Results
+
+This query returned the daily number of purchase events, distinct purchasing users, and total purchase revenue recorded during November 2020.
+
+## Interpretation
+
+I used this query to better understand how sales activity changed from day to day. From a marketing perspective, comparing daily purchases and revenue can help identify stronger sales periods and provide useful information when evaluating campaign performance.
+
+One thing I learned is that purchase events and purchasing users are different measures because one person can make more than one purchase. Also, purchase revenue depends on the values recorded in GA4, so the results should not automatically be treated as the business's final accounting revenue.
+
+
+# Query 8: Ecommerce Funnel (CTE + JOIN)
+
+## Purpose
+
+For my last query, I wanted to compare three important shopping activities: viewing a product, adding an item to the cart, and completing a purchase.
+
+I used CTEs to organize the information and a LEFT JOIN to combine the results into a table that is easier to understand.
+
+## SQL Query
+
+```sql
+WITH event_counts AS (
+  SELECT
+    event_name,
+    COUNT(*) AS total_events,
+    COUNT(DISTINCT user_pseudo_id) AS unique_users
+  FROM
+    `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+  WHERE
+    _TABLE_SUFFIX BETWEEN '20201101' AND '20201130'
+    AND event_name IN (
+      'view_item',
+      'add_to_cart',
+      'purchase'
+    )
+  GROUP BY
+    event_name
+),
+
+funnel_steps AS (
+  SELECT 'view_item' AS event_name, 1 AS step_order
+  UNION ALL
+  SELECT 'add_to_cart', 2
+  UNION ALL
+  SELECT 'purchase', 3
+)
+
+SELECT
+  f.step_order,
+  f.event_name,
+  COALESCE(e.total_events, 0) AS total_events,
+  COALESCE(e.unique_users, 0) AS unique_users
+FROM
+  funnel_steps AS f
+LEFT JOIN
+  event_counts AS e
+ON
+  f.event_name = e.event_name
+ORDER BY
+  f.step_order;
+```
+
+## Results
+
+| Step | Event | Total Events | Unique Users |
+|---|---|---:|---:|
+| 1 | view_item | 148,639 | 21,440 |
+| 2 | add_to_cart | 7,674 | 2,060 |
+| 3 | purchase | 2,054 | 1,532 |
+
+## Interpretation
+
+I noticed a large difference between the number of product views and add-to-cart events. This made me interested in understanding what might prevent visitors from moving closer to a purchase.
+
+From a marketing perspective, comparing these shopping activities can help identify areas that deserve more attention, such as product pages or the checkout experience. However, this query counts each event type separately and does not track whether the same users completed all three steps in order, so it cannot measure an actual funnel conversion rate.
+
+
+# Conclusion
+
+Working on this assignment helped me become more comfortable using SQL in BigQuery and understanding how GA4 data is organized.
+
+One of the most useful things I learned was how to use UNNEST to extract information from event parameters. At first, this structure was a little confusing, but practicing with page URLs and engagement time helped me understand it better.
+
+I also learned how CTEs and JOINs can make queries easier to organize, especially when working with different types of website activity.
+
+From a digital marketing perspective, I can see how these skills can help me analyze customer behavior, identify opportunities to improve a website, and make decisions based on data rather than assumptions.
+
+Overall, this assignment gave me more confidence in working with GA4 data and helped me connect SQL concepts with real marketing questions.
+
+# Appendix
+
+## GitHub Repository
+
+Link: To be added after publishing.
+
+## GitHub Pages
+
+Link: To be added after publishing.
+
