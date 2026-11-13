@@ -415,13 +415,13 @@ From a digital marketing perspective, I can see how these skills can help me ana
 
 Overall, this assignment gave me more confidence in working with GA4 data and helped me connect SQL concepts with real marketing questions.
 
+
 # Appendix
 
 ## GitHub Repository
 
-Link: To be added after publishing.
+[View my GitHub Repository](https://github.com/carmenjimenez97/GA4-4_SQL_Pack)
 
 ## GitHub Pages
 
-Link: To be added after publishing.
-
+[View my Published HTML Report](https://carmenjimenez97.github.io/GA4-4_SQL_Pack/)
